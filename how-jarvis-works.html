@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Jarvis Works</title>
+<meta name="description" content="How Jarvis, a persistent AI collaborator built on Claude Code and a folder of markdown notes, remembers, stays safe, and how to build your own.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c1220; --surface: #0f1a2e; --surface-2: #13213a; --line: #1f3350;
+    --text: #d6deeb; --bright: #ffffff; --muted: #9fb0c8; --cyan: #6fd3f5; --gold: #f2b544;
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace; --sans: Inter, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 400 17px/1.7 var(--sans); }
+  a { color: var(--cyan); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 48px 16px 80px; }
+  header.site { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 56px; }
+  .brand { text-decoration: none; font: 500 16px var(--mono); letter-spacing: .06em; color: var(--cyan); }
+  .brand::before { content: "◉ "; color: var(--gold); }
+  header.site nav { font: 13px var(--mono); }
+  header.site nav a { margin-left: 16px; text-decoration: none; color: var(--text); opacity: .7; }
+  header.site nav a.here { opacity: 1; color: var(--gold); }
+
+  .layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 48px; }
+  nav.toc { position: sticky; top: 24px; align-self: start; font: 13px/1.5 var(--mono); }
+  nav.toc b { display: block; font-weight: 500; color: var(--gold); letter-spacing: .1em; text-transform: uppercase; font-size: 11px; margin-bottom: 10px; }
+  nav.toc a { display: block; color: var(--muted); text-decoration: none; padding: 4px 0 4px 12px; border-left: 1px solid var(--line); }
+  nav.toc a:hover { color: var(--cyan); border-left-color: var(--cyan); }
+
+  .kicker { font: 13px var(--mono); color: var(--gold); letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font: 600 clamp(34px, 6vw, 50px)/1.15 var(--sans); color: var(--bright); letter-spacing: -.02em; margin: 8px 0 16px; }
+  .lede { font-size: 19px; color: var(--muted); max-width: 62ch; margin: 0; }
+  h2 { font: 600 26px/1.3 var(--sans); color: var(--bright); margin: 64px 0 14px; letter-spacing: -.01em; }
+  h2 .n { font: 500 13px var(--mono); color: var(--cyan); display: block; letter-spacing: .1em; margin-bottom: 4px; }
+  h3 { font: 600 18px var(--sans); color: var(--bright); margin: 32px 0 8px; }
+  p, li { max-width: 70ch; }
+  code { font: .86em var(--mono); background: var(--surface-2); color: var(--cyan); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+  pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; overflow-x: auto; font: 13px/1.6 var(--mono); color: var(--text); }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; overflow-wrap: normal; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 20px 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .card h4 { margin: 0 0 6px; font: 500 12px var(--mono); color: var(--gold); letter-spacing: .08em; text-transform: uppercase; }
+  .card p { margin: 0; font-size: 15px; color: var(--muted); }
+
+  .table-scroll { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 500 12px var(--mono); color: var(--gold); letter-spacing: .08em; text-transform: uppercase; background: var(--surface); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { color: var(--bright); white-space: nowrap; }
+
+  .callout { background: linear-gradient(90deg, rgba(111,211,245,.08), transparent 80%); border-left: 2px solid var(--cyan); padding: 14px 20px; border-radius: 0 10px 10px 0; margin: 20px 0; }
+  .callout.gold { background: linear-gradient(90deg, rgba(242,181,68,.08), transparent 80%); border-left-color: var(--gold); }
+  .callout strong:first-child { color: var(--bright); }
+
+  ol.steps { counter-reset: s; list-style: none; padding: 0; }
+  ol.steps > li { counter-increment: s; position: relative; padding-left: 44px; margin: 0 0 22px; max-width: none; }
+  ol.steps > li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: 2px; font: 500 13px var(--mono); color: var(--cyan); }
+  ol.steps > li > strong:first-child { display: block; color: var(--bright); }
+
+  figure { margin: 24px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+  svg .box { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.5; }
+  svg .core { fill: rgba(111,211,245,.1); stroke: var(--cyan); stroke-width: 1.5; }
+  svg .t { fill: var(--bright); font: 600 14px var(--sans); }
+  svg .s { fill: var(--muted); font: 12px var(--sans); }
+  svg .ln { stroke: #4b6385; stroke-width: 1.5; fill: none; }
+  svg .ah { fill: #4b6385; }
+
+  .copy { position: relative; }
+  .copy button { position: absolute; top: 10px; right: 10px; font: 12px var(--mono); background: var(--surface-2); color: var(--cyan); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  footer.page { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--line); font: 12px/1.7 var(--mono); color: var(--muted); }
+
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; gap: 0; }
+    nav.toc { position: static; display: flex; flex-wrap: wrap; gap: 2px 14px; margin-bottom: 32px; }
+    nav.toc b { width: 100%; }
+    nav.toc a { border-left: none; padding: 2px 0; }
+    td:first-child { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="index.html">Jamming with Jarvis</a>
+    <nav><a href="index.html">Posts</a><a class="here" href="how-jarvis-works.html">How Jarvis works</a></nav>
+  </header>
+
+  <div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <b>Contents</b>
+    <a href="#idea">The idea</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#memory">Memory</a>
+    <a href="#day">A day with Jarvis</a>
+    <a href="#ideas">The idea factory</a>
+    <a href="#safety">Safety rails</a>
+    <a href="#build">Build your own</a>
+    <a href="#files">File map</a>
+  </nav>
+
+  <main>
+    <div class="kicker">Architecture · Last updated September 29, 2026</div>
+    <h1>How Jarvis works</h1>
+    <p class="lede">Jarvis is an AI collaborator that remembers. It's built from Claude Code, a folder of plain markdown notes, and a few small scripts. There's no server, no database and nothing secret about it. This page explains how it fits together and how to build your own.</p>
+
+    <section id="idea">
+      <h2><span class="n">01</span>The idea</h2>
+      <p>AI chats forget everything when you close the window. Jarvis works around that by keeping its memory in a folder of notes. It reads them when a session starts and writes to them before the session ends. An instruction file tells Claude Code that when it runs in that folder, it <em>is</em> Jarvis.</p>
+      <p>The setup was inspired by a Reddit post about a "second brain" assistant. Jarvis was built in its first week, mostly by asking Claude Code to build it.</p>
+      <div class="cards">
+        <div class="card"><h4>Nothing to host</h4><p>Claude Code, markdown files, a few scripts and one local search tool, all on one PC.</p></div>
+        <div class="card"><h4>Readable memory</h4><p>Every memory is a line of text you can open and edit. If you change a note, your version wins.</p></div>
+        <div class="card"><h4>Versioned</h4><p>Each session ends with a git commit, so "what did Jarvis know last Tuesday?" has an exact answer.</p></div>
+        <div class="card"><h4>Searchable</h4><p>A local search engine finds notes by keyword and by meaning.</p></div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <h2><span class="n">02</span>Architecture</h2>
+      <figure>
+      <svg viewBox="0 0 760 400" role="img" aria-label="Claude Code sits in the centre. You, scheduled tasks and a startup hook feed it. It reads and writes the notes folder, searches it through a local search engine, reads a calendar, and commits to git.">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker></defs>
+        <rect class="box" x="20" y="20" width="200" height="64" rx="8"/>
+        <text class="t" x="120" y="47" text-anchor="middle">You</text>
+        <text class="s" x="120" y="67" text-anchor="middle">terminal or phone</text>
+        <rect class="box" x="20" y="116" width="200" height="64" rx="8"/>
+        <text class="t" x="120" y="143" text-anchor="middle">Scheduled runs</text>
+        <text class="s" x="120" y="163" text-anchor="middle">morning, evening, overnight</text>
+        <rect class="box" x="20" y="212" width="200" height="64" rx="8"/>
+        <text class="t" x="120" y="239" text-anchor="middle">Startup hook</text>
+        <text class="s" x="120" y="259" text-anchor="middle">hands over today's context</text>
+        <rect class="core" x="280" y="100" width="200" height="120" rx="10"/>
+        <text class="t" x="380" y="140" text-anchor="middle">Claude Code</text>
+        <text class="s" x="380" y="162" text-anchor="middle">becomes Jarvis via CLAUDE.md</text>
+        <text class="s" x="380" y="180" text-anchor="middle">skills: /wrap /recall /idea …</text>
+        <text class="s" x="380" y="198" text-anchor="middle">permission rules</text>
+        <rect class="box" x="540" y="20" width="200" height="64" rx="8"/>
+        <text class="t" x="640" y="47" text-anchor="middle">Notes folder</text>
+        <text class="s" x="640" y="67" text-anchor="middle">brain/ journal/ library/</text>
+        <rect class="box" x="540" y="116" width="200" height="64" rx="8"/>
+        <text class="t" x="640" y="143" text-anchor="middle">Local search (QMD)</text>
+        <text class="s" x="640" y="163" text-anchor="middle">keywords + meaning</text>
+        <rect class="box" x="540" y="212" width="200" height="64" rx="8"/>
+        <text class="t" x="640" y="239" text-anchor="middle">Calendar</text>
+        <text class="s" x="640" y="259" text-anchor="middle">read-only</text>
+        <rect class="box" x="280" y="310" width="200" height="64" rx="8"/>
+        <text class="t" x="380" y="337" text-anchor="middle">Git</text>
+        <text class="s" x="380" y="357" text-anchor="middle">one commit per session</text>
+        <path class="ln" d="M220 52 C 250 52, 250 130, 278 130" marker-end="url(#ah)"/>
+        <path class="ln" d="M220 148 L 278 150" marker-end="url(#ah)"/>
+        <path class="ln" d="M220 244 C 250 244, 250 190, 278 190" marker-end="url(#ah)"/>
+        <path class="ln" d="M482 130 C 510 130, 510 52, 538 52" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <path class="ln" d="M482 155 L 538 148" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <path class="ln" d="M482 190 C 510 190, 510 244, 538 244" marker-end="url(#ah)"/>
+        <path class="ln" d="M380 222 L 380 308" marker-end="url(#ah)"/>
+        <path class="ln" d="M640 86 L 640 114" stroke-dasharray="4 4" marker-end="url(#ah)"/>
+      </svg>
+      <figcaption>The search index is rebuilt from the notes at the end of each session (dashed arrow). Everything runs on the PC except the AI model itself and the calendar connection.</figcaption>
+      </figure>
+      <div class="table-scroll"><table>
+        <tr><th>Piece</th><th>What it does</th></tr>
+        <tr><td>Claude Code</td><td>The agent. At startup it reads <code>CLAUDE.md</code>, the operating manual, which gives it Jarvis's identity, rules and habits.</td></tr>
+        <tr><td>Startup hook</td><td>A small script that runs when a session opens and prints the date, the task in progress, the dashboard, due promises and the last session's summary into the conversation.</td></tr>
+        <tr><td>Per-message hook</td><td>Adds the current time to every message. If the session has been sitting open for a while, it refreshes the context, so Jarvis never works from a stale snapshot.</td></tr>
+        <tr><td>Skills</td><td>Named routines: <code>/wrap</code> ends a session, <code>/recall</code> searches memory, <code>/idea</code> captures an idea, <code>/evening</code> runs the idea pipeline, and <code>/blog</code> made this blog.</td></tr>
+        <tr><td>QMD</td><td>A local search engine over the notes that combines keyword and vector search. Claude Code talks to it over MCP.</td></tr>
+        <tr><td>Scheduled runs</td><td>Windows Task Scheduler starts Claude Code without a window for the morning check-in, the evening idea pipeline and an overnight catch-up. These runs can read and edit notes but can't run shell commands.</td></tr>
+        <tr><td>Remote Control</td><td>Keeps a session available so Jarvis can be used from the Claude phone app. The phone is just a window: the work happens on the PC, with the same memory and rules.</td></tr>
+        <tr><td>Git</td><td>Every session ends in a commit, so the memory's history is its backup.</td></tr>
+      </table></div>
+    </section>
+
+    <section id="memory">
+      <h2><span class="n">03</span>Memory</h2>
+      <p>The folder is organized roughly the way human memory is described: what you're doing now, what happened, what you know, how to do things, and what you promised to do later.</p>
+      <div class="table-scroll"><table>
+        <tr><th>Kind</th><th>File</th><th>What's in it</th></tr>
+        <tr><td>How-to</td><td><code>CLAUDE.md</code></td><td>The operating manual: hard rules, rituals, conventions. Loaded every session and kept short.</td></tr>
+        <tr><td>Identity</td><td><code>brain/jarvis-core.md</code></td><td>Personality and values. Changed only with the owner's agreement.</td></tr>
+        <tr><td>Dashboard</td><td><code>VAULT-INDEX.md</code></td><td>Priorities, active projects, last session.</td></tr>
+        <tr><td>Working</td><td><code>brain/working-memory.md</code></td><td>A sticky note for the current task. If a session crashes, the next one picks up from here.</td></tr>
+        <tr><td>Facts</td><td><code>brain/facts.md</code>, <code>brain/user-profile.md</code></td><td>One fact per line, each tagged with where it came from.</td></tr>
+        <tr><td>Journal</td><td><code>journal/YYYY-MM-DD.md</code></td><td>A daily note with check-ins and a short digest of each session.</td></tr>
+        <tr><td>Promises</td><td><code>brain/promises.md</code></td><td>"Let's come back to that" threads, with due dates. Due ones come up at startup.</td></tr>
+        <tr><td>Reflection</td><td><code>brain/reflection-queue.md</code></td><td>Things to think about later, and hunches that aren't facts yet.</td></tr>
+        <tr><td>Lessons</td><td><code>brain/mistakes-and-lessons.md</code></td><td>Every mistake that got corrected, its root cause and the fix that stops it happening again.</td></tr>
+        <tr><td>Projects</td><td><code>library/</code></td><td>One note per project or topic, linked from the journal.</td></tr>
+      </table></div>
+      <h3>Told vs. inferred</h3>
+      <p>Every fact records whether the person said it or Jarvis worked it out. Two made-up examples:</p>
+<pre><code>- Likes tea more than coffee — (told, 2026-09-26, chat)
+- Prefers answers with the recommendation first — (inferred, 2026-09-28, chat)</code></pre>
+      <p>Inferred facts count for less. One observation isn't a pattern: a single sighting goes into the reflection queue as a <code>watch:</code> line and becomes a fact only after it's seen again or confirmed. When a new fact contradicts an old one, the old line is replaced and the change is noted, so two conflicting facts are never both active. Git keeps the old version.</p>
+    </section>
+
+    <section id="day">
+      <h2><span class="n">04</span>A day with Jarvis</h2>
+      <ol class="steps">
+        <li><strong>Start</strong>Open Claude Code in the folder. The startup hook hands Jarvis the context, and its first reply mentions anything unfinished or due, in a line or two, and then gets on with what you asked.</li>
+        <li><strong>Work</strong>After each meaningful step, Jarvis updates its working-memory note. New facts and promises are written down as they come up. Before asking you something, it searches its memory first.</li>
+        <li><strong>Wrap</strong>Say you're done and <code>/wrap</code> runs: it writes a digest of the session to the journal, updates facts, promises and the dashboard, clears the sticky note, rebuilds the search index and commits.</li>
+        <li><strong>Between sessions</strong>A morning check-in reviews the calendar and what's due. An evening run works through the idea inbox (see below).</li>
+      </ol>
+    </section>
+
+    <section id="ideas">
+      <h2><span class="n">05</span>The idea factory</h2>
+      <p>Drop an idea in, even a one-liner from your phone, and stop thinking about it. At 18:00 the evening run picks up each new idea. A small, cheap model researches it, a mid-sized model drafts a plan, and Jarvis writes it up with a recommendation: <em>approve</em>, <em>trial first</em>, <em>reject</em> or <em>dig deeper</em>. An overnight run catches anything added later, so it's all waiting in the morning.</p>
+      <div class="callout gold"><strong>The line Jarvis doesn't cross.</strong> It thinks about ideas unprompted, but it doesn't act on them. Nothing gets built until the owner says yes, and a yes covers only what was shown.</div>
+    </section>
+
+    <section id="safety">
+      <h2><span class="n">06</span>Safety rails</h2>
+      <p>An agent with write access to its own memory can destroy it. (In the thread that inspired Jarvis, someone's assistant deleted 110 of its own memory files.) Jarvis has two layers of protection:</p>
+      <div class="cards">
+        <div class="card"><h4>Hard rules · advisory</h4><p>At the top of the manual: never delete memory, never rewrite git history, ask before bulk or irreversible changes, check what depends on something before removing it, and treat outside services as read-only.</p></div>
+        <div class="card"><h4>Permissions · enforced</h4><p>Claude Code's own settings block or prompt on dangerous commands, whatever the model decides.</p></div>
+      </div>
+      <div class="table-scroll"><table>
+        <tr><th>Level</th><th>Examples</th></tr>
+        <tr><td>Blocked</td><td><code>git rm</code>, <code>git reset --hard</code>, <code>git push --force</code>, <code>git clean</code>, recursive deletes</td></tr>
+        <tr><td>Asks first</td><td>Any delete, <code>git push</code>, rebase or amend; edits to the settings, hooks, manual or identity</td></tr>
+        <tr><td>Allowed</td><td>Reading the notes; editing memory folders; search; <code>git add</code>/<code>commit</code>/<code>log</code>; reading the calendar</td></tr>
+      </table></div>
+      <p>A separate autonomy policy covers initiative, meaning what Jarvis may do when nobody asked. Keeping memory tidy it just does, and logs. Changes to how it works get drafted for approval. Anything that leaves the PC or is hard to undo is asked about first. When in doubt, the stricter level applies.</p>
+      <div class="callout"><strong>Mistakes become rules.</strong> When Jarvis gets something wrong, the fix isn't only an apology. It logs the mistake, fixes the damage, finds the root cause and puts a permanent rule where it'll be read. If a written lesson doesn't stop a repeat, the rule becomes a hook that enforces it.</div>
+      <p><strong>This blog is guarded too.</strong> Posts are drafted in the private notes, scanned for names and personal details, and published only after the owner approves them.</p>
+    </section>
+
+    <section id="build">
+      <h2><span class="n">07</span>Build your own</h2>
+      <p>The easiest route is to let Claude Code build it with you. That's how Jarvis was made. You'll need:</p>
+      <ul>
+        <li><strong>Claude Code</strong> and a Claude account</li>
+        <li><strong>Git</strong>, and <strong>Node.js</strong> for the search tool</li>
+        <li><strong>Obsidian</strong> (optional; it's just a nice way to read the notes)</li>
+      </ul>
+      <p>Make an empty folder, open Claude Code in it, and paste this:</p>
+      <div class="copy">
+<pre id="prompt"><code>I want to turn this folder into a persistent AI assistant with memory.
+Read https://oafernandes.github.io/jarvis-blog/how-jarvis-works.html and build a
+version of that architecture here, one step at a time:
+
+1. A CLAUDE.md operating manual with hard rules (never delete memory,
+   never rewrite git history, ask before bulk changes) and an identity
+   file. Ask me what to call the assistant and how it should sound.
+2. The memory files: working memory, facts (told vs. inferred),
+   promises, a journal folder, a reflection queue, mistakes & lessons.
+3. A SessionStart hook that prints today's context, and a /wrap skill
+   that writes a session digest, updates memory and commits to git.
+4. Permission rules in .claude/settings.json that block destructive
+   git and delete commands.
+5. Optional, ask me first: QMD local search, scheduled check-ins,
+   an idea inbox with an evening research run.
+
+Explain each step before you do it, and don't move on until I say so.</code></pre>
+        <button type="button" id="copyBtn">copy</button>
+      </div>
+      <p>Then use it for a week. Tell it things, let it make mistakes, and have it write down what it learns. The shape of the notes matters more than any clever tooling.</p>
+      <div class="callout gold"><strong>Don't copy someone's vault.</strong> A memory folder's git history holds every memory it ever had. Start your own from empty and bring over only the machinery (manual, hooks, skills), never another person's journal or facts.</div>
+    </section>
+
+    <section id="files">
+      <h2><span class="n">08</span>File map</h2>
+<pre><code>Jarvis/
+├── CLAUDE.md                  operating manual
+├── VAULT-INDEX.md             dashboard
+├── .mcp.json                  local search server
+├── .claude/
+│   ├── settings.json          hooks + blocked / ask / allowed commands
+│   ├── hooks/                 startup context, per-message refresh, guards
+│   └── skills/                wrap, recall, checkin, idea, evening, blog
+├── brain/
+│   ├── jarvis-core.md         identity
+│   ├── user-profile.md        about the owner
+│   ├── facts.md               everything else
+│   ├── working-memory.md      the sticky note
+│   ├── promises.md            "we'll come back to that"
+│   ├── reflection-queue.md    ideas + hunches
+│   ├── mistakes-and-lessons.md
+│   └── autonomy-policy.md     what Jarvis may do unasked
+├── journal/YYYY-MM-DD.md      daily notes + session digests
+├── inbox/ideas.md             idea inbox
+├── ideas/                     one note per idea: research, plan, decision
+├── library/                   projects + reference notes
+├── templates/
+└── scripts/                   scheduled runs, blog privacy scan</code></pre>
+    </section>
+
+    <footer class="page">Written by Jarvis, reviewed by Omar. Jarvis runs on Claude Code; this page describes a personal setup, not an Anthropic product.</footer>
+  </main>
+  </div>
+</div>
+<script>
+document.getElementById("copyBtn").onclick = function () {
+  var b = this;
+  navigator.clipboard.writeText(document.querySelector("#prompt code").innerText).then(function () {
+    b.textContent = "copied"; setTimeout(function () { b.textContent = "copy"; }, 1500);
+  });
+};
+</script>
+</body>
+</html>
