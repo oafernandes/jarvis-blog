@@ -102,12 +102,13 @@
     <a href="#day">A day with Jarvis</a>
     <a href="#ideas">The idea factory</a>
     <a href="#safety">Safety rails</a>
+    <a href="#hooks">Hooks</a>
     <a href="#build">Build your own</a>
     <a href="#files">File map</a>
   </nav>
 
   <main>
-    <div class="kicker">Architecture · Last updated September 29, 2026</div>
+    <div class="kicker">Architecture · Last updated September 30, 2026</div>
     <h1>How Jarvis works</h1>
     <p class="lede">Jarvis is an AI collaborator that remembers. It's built from Claude Code, a folder of plain markdown notes, and a few small scripts. There's no server, no database and nothing secret about it. This page explains how it fits together and how to build your own.</p>
 
@@ -235,8 +236,28 @@
       <p><strong>This blog is guarded too.</strong> Posts are drafted in the private notes, scanned for names and personal details, and published only after the owner approves them.</p>
     </section>
 
+    <section id="hooks">
+      <h2><span class="n">07</span>Hooks: rules that can't be forgotten</h2>
+      <p>Most of what makes Jarvis <em>Jarvis</em> is written instructions: the manual, the skills, the lessons. The model reads them and chooses to follow them, and usually it does. But "usually" isn't good enough for everything. Some things have to happen every single time, and some mistakes shouldn't be possible at all.</p>
+      <p>That's what <strong>hooks</strong> are for. A hook is a small script that Claude Code itself runs at a fixed moment: when a session starts, when you send a message, just before a command runs. The important part is who runs it. It isn't the model deciding to; it's the software around the model. So a hook fires whether or not Jarvis remembers, agrees or is paying attention.</p>
+      <div class="table-scroll"><table>
+        <tr><th>Tool</th><th>Who applies it</th><th>Best for</th></tr>
+        <tr><td>Instructions</td><td>The model, by reading them</td><td>Judgement: tone, habits, when to ask, how to write things down</td></tr>
+        <tr><td>Permissions</td><td>Claude Code, before a command runs</td><td>Flat-out blocking known-dangerous commands</td></tr>
+        <tr><td>Hooks</td><td>Claude Code, at set moments</td><td>Things that must happen every time, and checks too specific for a simple block rule</td></tr>
+      </table></div>
+      <h3>Jarvis's hooks</h3>
+      <ul>
+        <li><strong>At startup</strong>, a hook hands over today's context: the date, the task in progress, the dashboard, what's due and the last session's summary. Continuity doesn't depend on Jarvis remembering to look.</li>
+        <li><strong>On every message</strong>, a hook adds the current time, because the model has no clock. If a session has been sitting open for hours (easy to do from a phone), it refreshes the context too. This one exists because Jarvis once reported a stale picture of the day from a session that had been open since before dawn.</li>
+        <li><strong>Before any shell command</strong>, a guard checks for one specific pattern that can freeze the terminal on this PC. The lesson was written down, then broken again the same day. So it became a hook.</li>
+      </ul>
+      <div class="callout"><strong>When a lesson repeats, it becomes a hook.</strong> That's the rule of thumb: judgement stays in writing, but anything that can be checked mechanically and has already slipped once gets enforced. Hooks also fail open: if one hits something unexpected, it steps aside rather than blocking the session.</div>
+      <p>One thing learned while writing this: a hook can only talk to the model at certain moments. At startup and on each message, whatever the hook prints goes into the conversation. At most other moments it's only shown in the log. So one of Jarvis's hooks, a "save your notes" reminder before long conversations get compressed, most likely never reached Jarvis at all. It's on the list to test. What actually protects the current task there is the startup hook running again and reloading the notes.</p>
+    </section>
+
     <section id="build">
-      <h2><span class="n">07</span>Build your own</h2>
+      <h2><span class="n">08</span>Build your own</h2>
       <p>The easiest route is to let Claude Code build it with you. That's how Jarvis was made. You'll need:</p>
       <ul>
         <li><strong>Claude Code</strong> and a Claude account</li>
@@ -269,7 +290,7 @@ Explain each step before you do it, and don't move on until I say so.</code></pr
     </section>
 
     <section id="files">
-      <h2><span class="n">08</span>File map</h2>
+      <h2><span class="n">09</span>File map</h2>
 <pre><code>Jarvis/
 ├── CLAUDE.md                  operating manual
 ├── VAULT-INDEX.md             dashboard
